@@ -1,0 +1,95 @@
+function results_struct = classify_main(classify_params,parameter,values)
+
+% ========================================================================
+% Author: Alona Golts (zadneprovski@gmail.com)
+% Date: 05-04-2016
+% ========================================================================
+% 
+% INPUT:
+% [classify_params] - struct contains all params needed for classification
+% [parameter]       - string containing parameter needed checking
+% [values]          - values of the parameter
+% example: results = classify_main(class_params,'check noise sigma',[0:0.1:2]);
+%                    This performs training and classification in the
+%                    presence of noise with random Gaussian noise with 
+%                    0:0.1:2 sigma values.
+% example: results = classify_main(class_params,'check noise sigma',0);
+%                    This runs the chosen algorithm with no parameter
+%                    changes. The most basic use of 'classify_main'.
+% OUTPUT:
+% [results_struct]  - same as classify_params struct, containing all params,
+%                     along with results: accuracy, training, test and total time.
+
+results_mat = zeros(5,length(values));
+
+for i = 1:length(values)
+    switch (parameter)
+        case ('check num atoms')                           % check number of atoms in dictionary learning
+            classify_params.num_atoms = values(i);
+        case ('check ker_param_1')                         % check main kernel parameter
+            classify_params.ker_param_1 = values(i);
+        case ('check ker_param_2')                         % check secondary kernel parameter
+            classify_params.ker_param_2 = values(i);      
+        case ('check noise sigma')                         % add noise level to test images to currupt them
+            classify_params.sigma = values(i); 
+        case ('check missing pixels')                      % corrupt test images by zeroing random pixels
+            classify_params.missing_pixels = values(i);
+        case ('check iter')                                % check number of iteration of dictionary learning
+            classify_params.iter = values(i);
+        case ('check card')                                % check cardinality in atom-decomposition/sparse coding
+            classify_params.card = values(i);
+        case ('check c')                                   % check c - number of samples in Nsytrom method
+            classify_params.c = values(i);                
+        case ('check k')                                   % check k - desired dimension after eigen-decomposition
+            classify_params.k = values(i);
+        case ('check approx dimension')                    % check dimension of approximation
+            classify_params.c = values(i);
+            classify_params.k = values(i);
+        case ('check num train')                           % check dependency of accuracy, runtime on number of training signals 
+            classify_params.train_size = values(i);
+        case ('check num batch')                           % check dependency in number of batches of train set
+            classify_params.num_batches = values(i);
+    end
+    
+    [~,space] = regexp(parameter,'check ');
+    switch (classify_params.linear_approx)
+        case 0
+            disp(['Checking ',parameter(space+1:end),' = ',num2str(values(i)),', ',classify_params.alg_type,', '...
+            num2str(i),' out of ',num2str(length(values)),' runs']);
+        case 1
+            disp(['Checking ',parameter(space+1:end),' = ',num2str(values(i)),', ',classify_params.alg_type,'+LKDL, '...
+            num2str(i),' out of ',num2str(length(values)),' runs']);
+        case 2
+            disp(['Checking ',parameter(space+1:end),' = ',num2str(values(i)),', ',classify_params.alg_type,'+RFF, '...
+            num2str(i),' out of ',num2str(length(values)),' runs']);
+        case 3
+            disp(['Checking ',parameter(space+1:end),' = ',num2str(values(i)),', ',classify_params.alg_type,'+Fastfood, '...
+            num2str(i),' out of ',num2str(length(values)),' runs']);
+    end
+    
+    % separate auxiliary function for mini-batch dictionary learning
+    if (classify_params.num_batches > 1)
+        results = classify_aux_batch(classify_params);
+    else if (classify_params.num_batches == 1)
+            results = classify_aux(classify_params);
+        end
+    end
+   
+    results.value = values(i);
+    results_mat(1,i) = results.value;                            % value of current parameter checked
+    results_mat(2,i) = results.percent;                          % accuracy result of classification
+    results_mat(3,i) = results.std;                              % std of accuracy in case of more than 1 run
+    results_mat(4,i) = results.virtual_train_t;                  % total time to compute virtual train set
+    results_mat(5,i) = results.virtual_test_t;                   % total time to compute virtual test set
+    results_mat(6,i) = results.train_t;                          % total training time for entire database
+    results_mat(7,i) = results.classify_t;                       % total test time for entire database
+    results_mat(8,i) = results.total_t;                          % total runtime: train_time + test_time + other_time
+    results_struct = classify_params;                            % save classification params used in experiment
+    results_struct.results_mat = results_mat;                    % results_matrix
+    results_struct.train_images = [];                            % deleting train_images (save space)
+    results_struct.test_images = [];                             % deleting train_labels (save space)
+    results_struct.train_labels = [];                            % deleting test_images  (save space)
+    results_struct.test_labels = [];                             % deleting test_labels  (save space)
+    results_struct.class_vec = results.class_vec;                % resulting labels after classification
+    results_struct.sp_codes = results.sp_codes;                  % sparse codes of test samples
+end

@@ -1,0 +1,68 @@
+function [accuracy1,accuracy2,sp_codes1,sp_codes2] = LCKSVD_aux(training_feats, testing_feats, H_train, H_test, params)
+
+% ========================================================================
+% Author: Alona Golts (zadneprovski@gmail.com)
+% Date: 05-04-2016
+%
+% This function wraps LCKSVD and adds an optional pre-processing stage of
+% LKDL
+%
+% INPUT:
+% training_feats  - input training set images
+% testing_feats - test set labels
+% H_train - input training set labels
+% H_test -test set labels
+% params - struct with classification parameters
+% 
+%
+% OUTPUT:
+% accuracy1 - classification accuracy of LCKSVD1
+% accuracy2 - classification accuracy of LCKSVD2
+% sp_codes1 - sparse representations of test set calculated with LCKSVD1
+% sp_codes2 - sparse representations of test set calculated with LCKSVD2
+% ========================================================================
+
+% virtual sample calculation
+ker_type = params.ker_type;
+ker_param_1 = params.ker_param_1;
+ker_param_2 = params.ker_param_2;
+linear_approx = params.linear_approx;
+c = params.c;
+k = params.k;
+samp_method = params.samp_method;
+ker_params = struct('X',0,'Y',0,'ker_type',ker_type,'ker_param_1',ker_param_1,'ker_param_2',ker_param_2);
+if linear_approx
+    [training_feats, testing_feats] = calc_virtual_map(training_feats,testing_feats,ker_params,samp_method,c,k);
+end
+
+sparsitythres = params.sparsitythres;
+sqrt_alpha = params.sqrt_alpha;
+sqrt_beta = params.sqrt_beta;
+dictsize = params.dictsize;
+iterations = params.iterations;
+iterations4ini = params.iterations4ini;
+
+% dictionary learning process
+% get initial dictionary Dinit and Winit
+% fprintf('\nLC-KSVD initialization... ');
+[Dinit,Tinit,Winit,Q_train] = initialization4LCKSVD(training_feats,H_train,dictsize,iterations4ini,sparsitythres);
+% fprintf('done!');
+
+% run LC K-SVD Training (reconstruction err + class penalty)
+% fprintf('\nDictionary learning by LC-KSVD1...');
+[D1,X1,T1,W1] = labelconsistentksvd1(training_feats,Dinit,Q_train,Tinit,H_train,iterations,sparsitythres,sqrt_alpha);
+% save('.\trainingdata\dictionarydata1.mat','D1','X1','W1','T1');
+% fprintf('done!');
+
+% run LC k-svd training (reconstruction err + class penalty + classifier err)
+% fprintf('\nDictionary and classifier learning by LC-KSVD2...')
+[D2,X2,T2,W2] = labelconsistentksvd2(training_feats,Dinit,Q_train,Tinit,H_train,Winit,iterations,sparsitythres,sqrt_alpha,sqrt_beta);
+% save('.\trainingdata\dictionarydata2.mat','D2','X2','W2','T2');
+% fprintf('done!');
+
+% classification process
+[prediction1,accuracy1,sp_codes1] = classification(D1, W1, testing_feats, H_test, sparsitythres);
+% fprintf('\nFinal recognition rate for LC-KSVD1 is : %.03f ', accuracy1);
+
+[prediction2,accuracy2,sp_codes2] = classification(D2, W2, testing_feats, H_test, sparsitythres);
+% fprintf('\nFinal recognition rate for LC-KSVD2 is : %.03f ', accuracy2);
